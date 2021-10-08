@@ -1,0 +1,41 @@
+pipeline {
+    agent { 
+        label 'master' 
+    } 
+    stages {
+        stage('Pull Docker Image From Nexus') {
+            steps {
+                 echo 'Setting the Credentials'
+                 withCredentials([usernamePassword(credentialsId: 'nexus-docker-hub', 
+                                                usernameVariable: 'USER', 
+                                                passwordVariable: 'PASSWORD')]) {
+                    sh 'docker login -u "$USER" -p "$PASSWORD" 10.7.7.1:8123'
+                }            
+
+                echo "Pull Dev Image"
+                sh '''
+                    docker pull 10.7.7.1:8123/quickapp-dev
+                '''
+            }
+        }
+        stage('Provision Docker Containiner') {
+            steps { 
+                sh '''
+                    cd Docker/Dev
+                    docker-compose --env-file .env.dev up -d
+                '''
+            }
+        }
+    }
+    post {
+        aborted {
+            build 'Destroy_Dev_Docker'
+        }
+        failure {
+            build 'Destroy_Dev_Docker'
+        }
+        unsuccessful {
+            build 'Destroy_Dev_Docker'
+        }
+    }
+}

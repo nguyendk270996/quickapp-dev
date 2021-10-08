@@ -1,0 +1,59 @@
+pipeline {
+    agent { 
+        label 'master' 
+    }
+     environment {  
+         BUILD_CONF = "Release" 
+    }
+
+    stages {        
+        stage('Build Docker Production Image') {             
+            steps {
+                echo "Building Image"
+                   withCredentials([string(credentialsId: 'quickapp-prod-decrypt-key', variable: 'DECRYPT_KEY')]) {
+                       withCredentials([string(credentialsId: 'git-lab-clone-token', variable: 'TOKEN')]) {
+                            sh '''
+                             cd Docker/Prod
+                             docker build --no-cache --build-arg CONF=$BUILD_CONF --build-arg decrypt_key=$DECRYPT_KEY --build-arg TOKEN=$TOKEN -t 10.7.7.1:8123/quickapp-prod .
+                            '''
+                       }
+                }                
+            }
+        }
+        stage('Push To Nexus') {            
+            steps {
+                echo 'Setting the Credentials'
+                withCredentials([usernamePassword(credentialsId: 'nexus-docker-hub', 
+                                                usernameVariable: 'USER', 
+                                                passwordVariable: 'PASSWORD')]) {
+                    sh 'docker login -u "$USER" -p "$PASSWORD" 10.7.7.1:8123'
+                }                 
+           
+                echo 'Push PROD Image'
+                sh 'docker push 10.7.7.1:8123/quickapp-prod' 
+            }
+        }
+        stage ('Confirm spin up Docker'){
+            steps{
+                script {
+                    env.SPIN_UP_DOCKER = input message: 'Do you want to spin up Docker Image ?',
+                    parameters: [choice(name: 'QuickApp-Prod', choices: 'no\nyes', description: 'Choose "yes" if you want to deploy this build')]
+                }
+            }
+        }
+        stage('Spin up Docker Image'){
+           when {
+            environment name: 'SPIN_UP_DOCKER', value: 'yes'
+            } 
+            steps{
+                build 'Provision_Docker_QuickApp_PROD'
+            }
+        }
+
+    }
+    post {
+        success {
+            echo "It's done"
+        }
+    }
+}

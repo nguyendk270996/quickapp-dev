@@ -1,0 +1,87 @@
+pipeline {
+    agent { 
+        label 'master' 
+    }
+    environment { 
+         ASPNETCORE_URLS = "https://10.5.6.2:5001;http://10.5.6.2:5000"
+         ASPNETCORE_Environment = "Development"        
+         BUILD_CONF = "Release" 
+         AWS_ECR_PATH = "828983638345.dkr.ecr.ap-southeast-1.amazonaws.com"
+         AWS_ECR_OS_NAME = "quickapp-ubuntu"
+         AWS_ECR_DEV_NAME = "quickapp-dev"
+    }
+    stages {                 
+        stage('QA Automation'){        
+            environment {
+                scannerHome = tool 'dotNet-5.0'
+            }   
+            steps{                
+                withCredentials([string(credentialsId: 'quickapp-dev-decrypt-key', variable: 'DECRYPT_KEY')]) {
+                     withSonarQubeEnv('Sonar-7.7.3') {
+                        sh '''
+                            export ALLURE_CONFIG=$(pwd)'/allureConfig.json'
+                            cd QuickApp
+                            gpg --output appsettings.Development.json  --batch --yes --passphrase $DECRYPT_KEY --decrypt appsettings.Development.json.gpg
+                            cd ..          
+                            dotnet ${scannerHome}/SonarScanner.MSBuild.dll begin /k:\"QuickApp-DEV\" 
+                            dotnet build                
+                            dotnet ${scannerHome}/SonarScanner.MSBuild.dll end
+                            dotnet test                                         
+                        '''
+                    }
+                }
+                allure([
+                includeProperties: false,
+                jdk: '',
+                properties: [],
+                reportBuildPolicy: 'ALWAYS',
+                results: [[path: 'QuickApp-QA/bin/Debug/net5.0/allure-results']]
+                ])
+            }
+        }
+        stage('Build Docker Dev Image') {            
+            steps {
+                echo "Building Image"
+                   withCredentials([string(credentialsId: 'quickapp-dev-decrypt-key', variable: 'DECRYPT_KEY')]) {
+                       withCredentials([string(credentialsId: 'git-lab-clone-token', variable: 'TOKEN')]) {
+                            sh '''
+                                 cd Docker/Dev
+                                 docker build --no-cache --build-arg CONF=$BUILD_CONF --build-arg REPO_PATH=$AWS_ECR_PATH --build-arg IMAGE_NAME=$AWS_ECR_OS_NAME --build-arg TOKEN=$TOKEN --build-arg decrypt_key=$DECRYPT_KEY -t $AWS_ECR_PATH/$AWS_ECR_DEV_NAME .
+                            '''
+                       }
+                    
+                }                
+            }
+        }
+        stage('Push To AWS') {           
+            steps {
+                echo 'Login to AWS'
+                sh'aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin $AWS_ECR_PATH'
+                echo 'Push Dev Image'
+                sh 'docker push $AWS_ECR_PATH/$AWS_ECR_DEV_NAME' 
+            }
+        }
+        stage ('Confirm spin up ECS'){
+            steps{
+                script {
+                    env.SPIN_UP_DOCKER = input message: 'Do you want to spin up ECS ?',
+                    parameters: [choice(name: 'QuickApp-Dev', choices: 'no\nyes', description: 'Choose "yes" if you want to deploy this build')]
+                }
+            }
+        }
+        stage('Spin up ECS'){
+           when {
+            environment name: 'SPIN_UP_DOCKER', value: 'yes'
+            } 
+            steps{
+                build 'Provision_ECS_QuickApp_DEV'
+            }
+        }
+
+    }
+    post {
+        success {
+            echo "It's done"
+        }
+    }
+}

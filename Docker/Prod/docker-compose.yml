@@ -1,0 +1,22 @@
+version: "3.9"
+services:
+  quick-app:
+    ports:
+      - "5069:5069"
+      - "5070:5070"
+    networks:
+      app-network-prod:
+         ipv4_address: 10.6.6.2  
+    image: 10.7.7.1:8123/quickapp-prod
+    working_dir: /App/QuickApp
+    entrypoint :  ["dotnet", "/App/QuickApp/bin/$BUILD_CONF/net5.0/publish/QuickApp.dll"]
+    environment:
+      - ASPNETCORE_Environment=$ASPNETCORE_Environment_VALUE
+      - ASPNETCORE_URLS=$ASPNETCORE_URLS_VALUE   
+networks:
+  app-network-prod:
+    driver: bridge
+    ipam:
+     config:
+       - subnet: 10.6.6.0/24
+         gateway: 10.6.6.1

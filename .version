@@ -1,0 +1,15 @@
+#ENV
+
+ubuntu: 20.04
+docker: 20.10.7
+dotnet: 5.0.302
+node: 14.17.2
+npm: 6.14.13
+mssql: 15.0.4138
+sonar: 5.2.2 #For MSBuild
+allure: 2.14.0
+#APP
+build: 4
+pipeline: 2.1.0
+app: 1.0
+DB: 1.0

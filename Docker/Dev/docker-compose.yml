@@ -1,0 +1,22 @@
+version: "3.9"
+services:
+  quick-app:
+    ports:
+      - "5001:5001"
+      - "5000:5000"
+    networks:
+      app-network:
+         ipv4_address: 10.5.6.2  
+    image: 828983638345.dkr.ecr.ap-southeast-1.amazonaws.com/quickapp-dev
+    working_dir: /App/QuickApp
+    entrypoint :  ["dotnet", "/App/QuickApp/bin/$BUILD_CONF/net5.0/publish/QuickApp.dll"]
+    environment:
+      - ASPNETCORE_Environment=$ASPNETCORE_Environment_VALUE
+      - ASPNETCORE_URLS=$ASPNETCORE_URLS_VALUE   
+networks:
+  app-network:
+    driver: bridge
+    ipam:
+     config:
+       - subnet: 10.5.6.0/24
+         gateway: 10.5.6.1

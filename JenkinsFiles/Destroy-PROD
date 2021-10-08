@@ -1,0 +1,16 @@
+pipeline {
+    agent { 
+        label 'master' 
+    } 
+    stages {       
+        stage('Destroy Dev Docker Environments') {
+            steps { 
+                sh '''
+                    cd Docker/Prod
+                    docker-compose down
+                    docker-compose rm
+                '''
+            }
+        }
+    }  
+}
